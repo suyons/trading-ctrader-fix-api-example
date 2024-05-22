@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import requests
 import json
 
@@ -17,11 +17,18 @@ async def hello_ctrader():
 
 @app.post("/")
 async def trade_signal(tv_body: dict):
+    """TradingView Webhook body example:
+     {
+        "symbol": "EURUSD",
+        "side": "Buy",
+        "price": "1.23456"
+    }
+    """
     tg_body = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": "Trade signal received!\n\n"
         + f"Symbol: {tv_body['symbol']}\n"
-        + f"Action: {tv_body['action']}\n"
+        + f"Side: {tv_body['side']}\n"
         + f"Price: {tv_body['price']}",
     }
     response = requests.post(
@@ -29,6 +36,6 @@ async def trade_signal(tv_body: dict):
     )
 
     if response.status_code == 200:
-        return {"message": "Trade signal received and sent to Telegram!"}, 200
+        return {"message": "Trade signal received and sent to Telegram."}
     else:
-        return {"message": "Failed to send trade signal to Telegram!"}, 500
+        raise HTTPException(status_code=500, detail="Failed to send trade signal to Telegram.")
