@@ -1,0 +1,52 @@
+//@version=5
+indicator('Multi Timeframe RSI', 'Multitime RSI', true)
+
+// Input
+tf_1 = input.timeframe("5", "", inline = "1", group = "RSI: TIMEFRAME")
+tf_2 = input.timeframe("15", "", inline = "1", group = "RSI: TIMEFRAME")
+tf_3 = input.timeframe("60", "", inline = "1", group = "RSI: TIMEFRAME")
+tf_4 = input.timeframe("240", "", inline = "1", group = "RSI: TIMEFRAME")
+
+val_high = input.int(60, "", inline = "1", group = "RSI: LINE")
+val_mid = input.int(50, "", inline = "1", group = "RSI: LINE")
+val_low = input.int(40, "", inline = "1", group = "RSI: LINE")
+
+rsi_len = input.int(21, "Length", inline = "1", group = "RSI: CONFIG")
+rsi_src = input.source(close, "Source", inline = "1", group = "RSI: CONFIG")
+
+lookback_len = input.int(30, "Lookback", inline = "1", group = "SIGNAL: LENGTH")
+order_len = input.int(300, "Order", inline = "1", group = "SIGNAL: LENGTH")
+
+// Fetch
+rsi_1 = request.security(syminfo.tickerid, tf_1, ta.rsi(rsi_src, rsi_len))
+rsi_2 = request.security(syminfo.tickerid, tf_2, ta.rsi(rsi_src, rsi_len))
+rsi_3 = request.security(syminfo.tickerid, tf_3, ta.rsi(rsi_src, rsi_len))
+rsi_4 = request.security(syminfo.tickerid, tf_4, ta.rsi(rsi_src, rsi_len))
+
+rsi_current = switch timeframe.period
+    tf_1 => rsi_1
+    tf_2 => rsi_2
+    tf_3 => rsi_3
+    tf_4 => rsi_4
+    => na
+
+// Condition
+buy = rsi_4 > val_low and ta.crossover(rsi_current, val_low)
+sell = rsi_4 < val_high and ta.crossunder(rsi_current, val_high)
+
+lookback(direction, len) =>
+    bool result = false
+    for i = 1 to len
+        if direction[i]
+            result := true
+    result
+
+// Plot
+lowest = ta.lowest(low, lookback_len)
+highest = ta.highest(high, lookback_len)
+
+if buy and not lookback(buy, lookback_len)
+    line.new(x1 = bar_index, y1 = lowest, x2 = bar_index + order_len, y2 = lowest, color = color.new(color.green, 50), style = line.style_solid, width = 1)
+
+if sell and not lookback(sell, lookback_len)
+    line.new(x1 = bar_index, y1 = highest, x2 = bar_index + order_len, y2 = highest, color = color.new(color.red, 50), style = line.style_solid, width = 1)
