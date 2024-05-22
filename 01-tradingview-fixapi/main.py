@@ -1,9 +1,6 @@
 from fastapi import FastAPI
 import requests
 import json
-from fastapi import FastAPI
-import requests
-import json
 
 app = FastAPI()
 
