@@ -1,0 +1,15 @@
+{
+  "Host": "CTRADER_HOST",
+  "Port": 1234,
+  "SSL": false,
+  "Username": "YOUR_USERNAME",
+  "Password": "YOUR_PASSWORD",
+  "BeginString": "FIX.4.4",
+  "SenderCompID": "BROKER_ID",
+  "SenderSubID": "TRADE",
+  "TargetCompID": "cServer",
+  "TargetSubID": "TRADE",
+  "HeartBeat": "30",
+  "TelegramBotToken": "111222333:AbCdEfGhIjKlMnOpQrStUvWxYz1234567890",
+  "TelegramChatID": "123456789"
+}
