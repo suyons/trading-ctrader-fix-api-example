@@ -2,10 +2,10 @@
 indicator('Multi Timeframe RSI', 'Multitime RSI', true)
 
 // Input
-tf_1 = input.timeframe('5', '', inline = '1', group = 'RSI: TIMEFRAME')
-tf_2 = input.timeframe('15', '', inline = '1', group = 'RSI: TIMEFRAME')
-tf_3 = input.timeframe('60', '', inline = '1', group = 'RSI: TIMEFRAME')
-tf_4 = input.timeframe('240', '', inline = '1', group = 'RSI: TIMEFRAME')
+tf_1 = input.timeframe('15', '', inline = '1', group = 'RSI: TIMEFRAME')
+tf_2 = input.timeframe('60', '', inline = '1', group = 'RSI: TIMEFRAME')
+tf_3 = input.timeframe('240', '', inline = '1', group = 'RSI: TIMEFRAME')
+tf_4 = input.timeframe('D', '', inline = '1', group = 'RSI: TIMEFRAME')
 
 val_high = input.int(60, '', inline = '1', group = 'RSI: LINE')
 val_mid = input.int(50, '', inline = '1', group = 'RSI: LINE')
@@ -14,8 +14,9 @@ val_low = input.int(40, '', inline = '1', group = 'RSI: LINE')
 rsi_len = input.int(21, 'Length', inline = '1', group = 'RSI: CONFIG')
 rsi_src = input.source(close, 'Source', inline = '1', group = 'RSI: CONFIG')
 
-lookback_len = input.int(30, 'Lookback', inline = '1', group = 'SIGNAL: LENGTH')
-order_len = input.int(300, 'Order', inline = '1', group = 'SIGNAL: LENGTH')
+sig_lookback = input.int(30, 'Lookback', inline = '1', group = 'SIGNAL: CONFIG')
+sig_lifespan = input.int(300, 'Order', inline = '1', group = 'SIGNAL: CONFIG')
+sig_src = input.bool(true, 'Source', inline = '1', group = 'SIGNAL: CONFIG')
 
 // Fetch
 rsi_1 = request.security(syminfo.tickerid, tf_1, ta.rsi(rsi_src, rsi_len))
@@ -41,18 +42,19 @@ lookback(side, len) =>
             result := true
     result
 
-buy_condition = buy and not lookback(buy, lookback_len)
-sell_condition = sell and not lookback(sell, lookback_len)
+buy_condition = buy and not lookback(buy, sig_lookback)
+sell_condition = sell and not lookback(sell, sig_lookback)
 
 // Plot
-lowest = ta.lowest(low, lookback_len)
-highest = ta.highest(high, lookback_len)
+lowest = ta.lowest(low, sig_lookback)
+highest = ta.highest(high, sig_lookback)
 
 if buy_condition
-    line.new(x1 = bar_index, y1 = lowest, x2 = bar_index + order_len, y2 = lowest, color = color.new(color.green, 50), style = line.style_solid, width = 1)
+    buy_src = sig_src ? close : lowest
+    line.new(x1 = bar_index, y1 = buy_src, x2 = bar_index + sig_lifespan, y2 = buy_src, color = color.new(color.green, 20), style = line.style_solid, width = 4)
+    alert('{"symbol":"'+syminfo.ticker+'","side":"Buy","price":'+str.tostring(buy_src)+'}', alert.freq_once_per_bar_close)
 
 if sell_condition
-    line.new(x1 = bar_index, y1 = highest, x2 = bar_index + order_len, y2 = highest, color = color.new(color.red, 50), style = line.style_solid, width = 1)
-
-alertcondition(buy_condition, 'Buy', '{"symbol":"'+syminfo.ticker+'","side":"Buy","price":'+lowest+'}')
-alertcondition(sell_condition, 'Sell', '{"symbol":"'+syminfo.ticker+'","side":"Sell","price":'+highest+'}')
+    sell_src = sig_src ? close : highest
+    line.new(x1 = bar_index, y1 = sell_src, x2 = bar_index + sig_lifespan, y2 = sell_src, color = color.new(color.red, 20), style = line.style_solid, width = 4)
+    alert('{"symbol":"'+syminfo.ticker+'","side":"Sell","price":'+str.tostring(sell_src)+'}', alert.freq_once_per_bar_close)

@@ -38,4 +38,6 @@ async def trade_signal(tv_body: dict):
     if response.status_code == 200:
         return {"message": "Trade signal received and sent to Telegram."}
     else:
-        raise HTTPException(status_code=500, detail="Failed to send trade signal to Telegram.")
+        raise HTTPException(
+            status_code=500, detail="Failed to send trade signal to Telegram."
+        )
