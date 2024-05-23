@@ -1,11 +1,14 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © syoungs
+
 //@version=5
-indicator('Multi Timeframe RSI', 'Multitime RSI', true)
+strategy('Multi Timeframe RSI Strategy', 'Multitime RSI', true, pyramiding = 100, default_qty_type = strategy.fixed, default_qty_value = 5000, initial_capital = 1000, currency = currency.USD, commission_type = strategy.commission.cash_per_contract, commission_value = 0.0002, margin_long = 0.2, margin_short = 0.2)
 
 // Input
-tf_1 = input.timeframe('5', '', inline = '1', group = 'TIMEFRAME')
-tf_2 = input.timeframe('15', '', inline = '1', group = 'TIMEFRAME')
-tf_3 = input.timeframe('60', '', inline = '1', group = 'TIMEFRAME')
-tf_4 = input.timeframe('240', '', inline = '1', group = 'TIMEFRAME')
+tf_1 = input.timeframe('5', '', inline = '1', group = 'RSI: TIMEFRAME')
+tf_2 = input.timeframe('15', '', inline = '1', group = 'RSI: TIMEFRAME')
+tf_3 = input.timeframe('60', '', inline = '1', group = 'RSI: TIMEFRAME')
+tf_4 = input.timeframe('240', '', inline = '1', group = 'RSI: TIMEFRAME')
 
 val_high = input.int(65, '', inline = '1', group = 'RSI: LINE')
 val_mid = input.int(50, '', inline = '1', group = 'RSI: LINE')
@@ -14,7 +17,7 @@ val_low = input.int(35, '', inline = '1', group = 'RSI: LINE')
 rsi_len = input.int(21, 'Length', inline = '1', group = 'RSI: CONFIG')
 rsi_src = input.source(close, 'Source', inline = '1', group = 'RSI: CONFIG')
 rsi_tf1 = input.int(1, 'Small TF', 1, 4, 1, inline = '2', group = 'RSI: CONFIG')
-rsi_tf2 = input.int(4, 'Large TF', 1, 4, 1, inline = '2', group = 'RSI: CONFIG')
+rsi_tf2 = input.int(5, 'Large TF (5=avg)', 1, 5, 1, inline = '2', group = 'RSI: CONFIG')
 
 sig_lookback = input.int(10, 'Lookback', inline = '1', group = 'SIGNAL: CONFIG')
 sig_length = input.int(100, 'Length', inline = '1', group = 'SIGNAL: CONFIG')
@@ -42,9 +45,6 @@ rsi_large = switch rsi_tf2
     4 => rsi_4
     5 => rsi_avg
     => na
-    
-lowest = ta.lowest(low, sig_lookback)
-highest = ta.highest(high, sig_lookback)
 
 // Condition
 buy = ta.crossunder(rsi_small, val_low) and (sig_strategy ? rsi_large > val_mid : rsi_large < val_low)
@@ -60,14 +60,21 @@ lookback(side, len) =>
 buy_condition = buy and not lookback(buy, sig_lookback)
 sell_condition = sell and not lookback(sell, sig_lookback)
 
+// Strategy
+if buy_condition
+    strategy.entry('Buy', strategy.long)
+
+if sell_condition
+    strategy.entry('Sell', strategy.short)
+
 // Plot
+lowest = ta.lowest(low, sig_lookback)
+highest = ta.highest(high, sig_lookback)
 
 if buy_condition
     buy_src = sig_src ? close : lowest
     line.new(x1 = bar_index, y1 = buy_src, x2 = bar_index + sig_length, y2 = buy_src, color = color.new(color.green, 30), style = line.style_solid, width = 4)
-    alert('{"symbol":"'+syminfo.ticker+'","side":"Buy","price":'+str.tostring(buy_src)+'}', alert.freq_once_per_bar_close)
 
 if sell_condition
     sell_src = sig_src ? close : highest
     line.new(x1 = bar_index, y1 = sell_src, x2 = bar_index + sig_length, y2 = sell_src, color = color.new(color.red, 30), style = line.style_solid, width = 4)
-    alert('{"symbol":"'+syminfo.ticker+'","side":"Sell","price":'+str.tostring(sell_src)+'}', alert.freq_once_per_bar_close)
