@@ -2,6 +2,7 @@ import json, requests
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 from ctrader_fix.ctrader import Ctrader
+import asyncio
 
 
 app = FastAPI()
@@ -88,27 +89,25 @@ async def quote(symbol: str = None):
 @app.post("/buy")
 async def buy(order: OrderModel):
     for i in range(qty_mult):
-        if api.buy(order.symbol, order.volume, order.stoploss, order.takeprofit):
-            tg_body = {
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": f"📈 BUY {order.symbol} ({order.volume})",
-            }
-            return telegram_request(tg_body)
-        else:
-            raise HTTPException(status_code=500, detail="Buy Order failed.")
+        api.buy(order.symbol, order.volume, order.stoploss, order.takeprofit)
+        tg_body = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": f"📈 BUY {order.symbol} ({order.volume})",
+        }
+        await telegram_request(tg_body)
+        await asyncio.sleep(1)
 
 
 @app.post("/sell")
 async def sell(order: OrderModel):
     for i in range(qty_mult):
-        if api.sell(order.symbol, order.volume, order.stoploss, order.takeprofit):
-            tg_body = {
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": f"📉 SELL {order.symbol} ({order.volume})",
-            }
-            return telegram_request(tg_body)
-        else:
-            raise HTTPException(status_code=500, detail="Sell Order failed.")
+        api.sell(order.symbol, order.volume, order.stoploss, order.takeprofit)
+        tg_body = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": f"📉 SELL {order.symbol} ({order.volume})",
+        }
+        await telegram_request(tg_body)
+        await asyncio.sleep(1)
 
 
 @app.post("/buyLimit")

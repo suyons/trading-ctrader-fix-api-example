@@ -121,11 +121,6 @@ if buy
 if sell
     line.new(x1 = bar_index, y1 = close, x2 = bar_index + 100, y2 = close, color = color.new(color.red, 30), style = line.style_solid, width = 4)
 
-alertcondition(P_OB_Over,  title = "MLMI Crossover OB",  message = "MLMI Crossover OB")
-alertcondition(P_OB_Under, title = "MLMI Crossunder OB", message = "MLMI Crossunder OB")
-alertcondition(P_OS_Over,  title = "MLMI Crossover OS",  message = "MLMI Crossover OS")
-alertcondition(P_OS_Under, title = "MLMI Crossunder OS", message = "MLMI Crossunder OS")
-alertcondition(P_Mid_Over, title = "MLMI Crossover 50",  message = "MLMI Crossover 50")
-alertcondition(P_Mid_Under,title = "MLMI Crossunder 50", message = "MLMI Crossunder 50")
-alertcondition(P_MA_Over,  title = "MLMI Crossover Ma",  message = "MLMI Crossover Ma")
-alertcondition(P_MA_Under, title = "MLMI Crossunder Ma", message = "MLMI Crossunder Ma")
+alert_message = '{"symbol":"'+"{{ticker}}"+'","volume":0.01}'
+alertcondition(buy,  title = "Buy",  message = alert_message)
+alertcondition(sell, title = "Sell", message = alert_message)
