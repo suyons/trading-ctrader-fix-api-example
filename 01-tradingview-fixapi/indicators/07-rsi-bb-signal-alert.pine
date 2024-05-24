@@ -25,8 +25,8 @@ sig_lookback = input.int(10, 'Lookback', inline='1', group='SIGNAL: CONFIG')
 sig_length = input.int(100, 'Length', inline='1', group='SIGNAL: CONFIG')
 
 // Fetch
-rsi_1 = ta.rsi(rsi_src, rsi_len) - 50
-rsi_2 = ta.rsi(rsi_src, rsi_len) - 50
+rsi_1 = request.security(syminfo.tickerid, tf_1, ta.rsi(rsi_src, rsi_len)) - 50
+rsi_2 = request.security(syminfo.tickerid, tf_2, ta.rsi(rsi_src, rsi_len)) - 50
 
 band(src, type, ma_len, dev_len) =>
     basis = switch type
@@ -43,8 +43,8 @@ band(src, type, ma_len, dev_len) =>
     perb = 100 * (src - basis) / (stdev * bb_dev_mult * 2)
     [basis, upper, lower, perb]
 
-[basis_1, upper_1, lower_1, perb_1] = band(bb_src, bb_ma_type, bb_ma_len, bb_dev_len)
-[basis_2, upper_2, lower_2, perb_2] = band(bb_src, bb_ma_type, bb_ma_len, bb_dev_len)
+[basis_1, upper_1, lower_1, perb_1] = request.security(syminfo.tickerid, tf_1, band(bb_src, bb_ma_type, bb_ma_len, bb_dev_len))
+[basis_2, upper_2, lower_2, perb_2] = request.security(syminfo.tickerid, tf_2, band(bb_src, bb_ma_type, bb_ma_len, bb_dev_len))
 
 // Condition
 trend_up = rsi_2 > line_val_3
@@ -64,7 +64,16 @@ lookback(side, len) =>
 buy_condition = buy and not lookback(buy, sig_lookback)
 sell_condition = sell and not lookback(sell, sig_lookback)
 
-// Strategy
+// Plot
+plot(basis_1, "Basis 1", color.new(#00e676, 0), 1)
+plot(upper_1, "Upper 1", color.new(#00e676, 0), 1)
+plot(lower_1, "Lower 1", color.new(#00e676, 0), 1)
+
+plot(basis_2, "Basis 2", color.new(#ff9800, 0), 2)
+plot(upper_2, "Upper 2", color.new(#ff9800, 0), 2)
+plot(lower_2, "Lower 2", color.new(#ff9800, 0), 2)
+
+// Signal
 if buy_condition
     line.new(x1 = bar_index, y1 = close, x2 = bar_index + sig_length, y2 = close, color = color.new(color.green, 30), style = line.style_solid, width = 4)
     alert('{"symbol":"'+syminfo.ticker+'","side":"Buy","price":'+str.tostring(close)+'}', alert.freq_once_per_bar_close)
