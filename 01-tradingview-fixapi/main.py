@@ -66,11 +66,6 @@ async def telegram_request(tg_body: dict):
         raise HTTPException(status_code=500, detail="Telegram connection error.")
 
 
-@app.get("/")
-async def hello_ctrader():
-    return {"message": "Hello cTrader!"}
-
-
 @app.post("/login")
 async def login():
     api = Ctrader(HOST_NAME, SENDER_COMPID, PASSWORD)
