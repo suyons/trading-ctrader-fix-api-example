@@ -39,6 +39,7 @@ SYMBOLSLIST = {
         37: {'id': 37, 'pip_position': 4, 'name': 'GBPNOK', 'bid_volume': 0, 'ask_volume': 0},
         39: {'id': 39, 'pip_position': 4, 'name': 'NZDCHF', 'bid_volume': 0, 'ask_volume': 0},
         40: {'id': 40, 'pip_position': 4, 'name': 'GBPCHF', 'bid_volume': 0, 'ask_volume': 0},
+        41: {'id': 41, 'pip_position': 4, 'name': 'XAUUSD', 'bid_volume': 0, 'ask_volume': 0},
         43: {'id': 43, 'pip_position': 4, 'name': 'USDTRY', 'bid_volume': 0, 'ask_volume': 0},
         44: {'id': 44, 'pip_position': 4, 'name': 'EURTRY', 'bid_volume': 0, 'ask_volume': 0},
         46: {'id': 46, 'pip_position': 4, 'name': 'EURZAR', 'bid_volume': 0, 'ask_volume': 0},
@@ -54,6 +55,9 @@ SYMBOLSLIST = {
         57: {'id': 57, 'pip_position': 4, 'name': 'EURDKK', 'bid_volume': 0, 'ask_volume': 0},
         60: {'id': 60, 'pip_position': 4, 'name': 'USDCNH', 'bid_volume': 0, 'ask_volume': 0},
         61: {'id': 61, 'pip_position': 4, 'name': 'GBPSEK', 'bid_volume': 0, 'ask_volume': 0},
+        101: {'id': 101, 'pip_position': 0, 'name': 'BTCUSD', 'bid_volume': 0, 'ask_volume': 0},
+        213: {'id': 213, 'pip_position': 1, 'name': 'US100', 'bid_volume': 0, 'ask_volume': 0},
+        214: {'id': 214, 'pip_position': 1, 'name': 'US30', 'bid_volume': 0, 'ask_volume': 0},
     },
     'mpa': {
         99: {'id': 99, 'pip_position': 4, 'name': '99', 'bid_volume': 0, 'ask_volume': 0},

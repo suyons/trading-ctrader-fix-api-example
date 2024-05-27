@@ -14,7 +14,7 @@ class Ctrader:
         server=None,
         account=None,
         password=None,
-        currency="EUR",
+        currency="USD",
         client_id=1,
         spread=0.00005,
         debug=False,
