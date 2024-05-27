@@ -5,7 +5,7 @@ import time
 import random
 from operator import itemgetter
 from .fix import FIX, Side, OrderType
-from .Symbol import SYMBOLSLIST
+from .symbol import SYMBOLSLIST
 
 
 class Ctrader:
