@@ -2,26 +2,28 @@
 
     uv run python src/backtest.py
 
-Walks the entry-timeframe closes bar by bar, reusing the live decision rule
+Walks the entry-timeframe bars in time order, reusing the live decision rule
 (:meth:`MultiTimeframeRsiStrategy.signal_from_rsi`) with no lookahead — the trend
-RSI at each bar comes only from already-completed higher-timeframe blocks. The
-position model is *flip on opposite signal*: long until a SELL, short until a BUY
-(no pyramiding); the open position is closed at the final bar.
+RSI at each bar is built only from higher-timeframe blocks that have already
+closed (bucketed by real timestamp, so weekend gaps don't misalign it). Position
+model: *flip on opposite signal* — long until a SELL, short until a BUY, no
+pyramiding — and the open position is closed at the final bar.
 
-ponytail: cTrader FIX has no history endpoint, so this ships with a deterministic
-synthetic price series (`synthetic_closes`). Swap in bars from a real history API
-to backtest on actual prices — the engine is unchanged. Results on synthetic data
-are illustrative only, not a measure of real performance.
+Bars are ``(epoch_seconds, close)``. `main` pulls real EURUSD 5m data via
+:mod:`history`; if that fails (e.g. outside Yahoo's ~60-day intraday window) it
+falls back to a deterministic synthetic series so the command always runs.
 """
 
+import bisect
 import random
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
+from history import fetch_bars
 from strategy import MultiTimeframeRsiStrategy, Signal, rsi_series
 
-# 4h trend bar / 5m entry bar = 48 entry bars per trend block.
-TREND_RATIO = 48
+ENTRY_SECONDS = 300  # 5m entry timeframe
+TREND_SECONDS = 14400  # 4h trend timeframe
 BARS_PER_DAY = 288  # 24h of 5-minute bars
 
 
@@ -35,51 +37,70 @@ class BacktestResult:
     max_drawdown_pct: float
 
 
-def synthetic_closes(
+def synthetic_bars(
     start: date, end: date, *, seed: int = 20260501, start_price: float = 1.0800
-) -> list[float]:
-    """Deterministic weekday 5m closes for [start, end] (forex is closed weekends).
+) -> list[tuple[int, float]]:
+    """Deterministic weekday 5m bars for [start, end] (forex is closed weekends).
 
     A seeded Gaussian random walk — stands in for a real history feed.
     """
     rng = random.Random(seed)
-    closes: list[float] = []
+    bars: list[tuple[int, float]] = []
     price = start_price
     day = start
     while day <= end:
         if day.weekday() < 5:  # Mon-Fri
-            for _ in range(BARS_PER_DAY):
+            day_start = int(
+                datetime(day.year, day.month, day.day, tzinfo=timezone.utc).timestamp()
+            )
+            for step in range(BARS_PER_DAY):
                 price *= 1 + rng.gauss(0, 0.0004)
-                closes.append(price)
+                bars.append((day_start + step * ENTRY_SECONDS, price))
         day += timedelta(days=1)
-    return closes
+    return bars
+
+
+def _trend_blocks(bars, trend_seconds):
+    """Resample bars into (bucket_id, close) per completed higher-timeframe block."""
+    ids: list[int] = []
+    closes: list[float] = []
+    for timestamp, close in bars:
+        bucket = timestamp // trend_seconds
+        if ids and ids[-1] == bucket:
+            closes[-1] = close
+        else:
+            ids.append(bucket)
+            closes.append(close)
+    return ids, closes
 
 
 def run_backtest(
-    entry_closes: list[float],
+    bars: list[tuple[int, float]],
     strategy: MultiTimeframeRsiStrategy,
-    trend_ratio: int = TREND_RATIO,
+    trend_seconds: int = TREND_SECONDS,
 ) -> BacktestResult:
     length = strategy.rsi_length
-    entry_rsi = rsi_series(entry_closes, length)
+    closes = [close for _, close in bars]
+    if len(closes) <= length:
+        return _summarize([])
 
-    # Trend closes = the close of each completed higher-timeframe block.
-    blocks = len(entry_closes) // trend_ratio
-    trend_closes = [entry_closes[(b + 1) * trend_ratio - 1] for b in range(blocks)]
-    trend_rsi = rsi_series(trend_closes, length) if blocks > length else []
+    entry_rsi = rsi_series(closes, length)
+    block_ids, block_closes = _trend_blocks(bars, trend_seconds)
+    trend_rsi = rsi_series(block_closes, length) if len(block_closes) > length else []
 
     position = 0  # +1 long, -1 short, 0 flat
     entry_price = 0.0
     returns: list[float] = []
 
-    for index in range(length + 1, len(entry_closes)):
-        last_block = index // trend_ratio - 1  # newest fully-completed trend block
-        if last_block <= length:
+    for index in range(length + 1, len(closes)):
+        # Latest trend block that has fully closed before this bar (no lookahead).
+        block = bisect.bisect_left(block_ids, bars[index][0] // trend_seconds) - 1
+        if block <= length or block >= len(trend_rsi) or trend_rsi[block] is None:
             continue
         signal = strategy.signal_from_rsi(
-            trend_rsi[last_block], entry_rsi[index - 1], entry_rsi[index]
+            trend_rsi[block], entry_rsi[index - 1], entry_rsi[index]
         )
-        price = entry_closes[index]
+        price = closes[index]
         if signal is Signal.BUY and position <= 0:
             if position < 0:
                 returns.append((entry_price - price) / entry_price)
@@ -90,7 +111,7 @@ def run_backtest(
             position, entry_price = -1, price
 
     if position != 0:  # close the open position at the last bar
-        last = entry_closes[-1]
+        last = closes[-1]
         pnl = (last - entry_price) if position > 0 else (entry_price - last)
         returns.append(pnl / entry_price)
 
@@ -121,14 +142,25 @@ def _summarize(returns: list[float]) -> BacktestResult:
     )
 
 
+def _load_bars(symbol: str, start: date, end: date) -> tuple[list, str]:
+    try:
+        bars = fetch_bars(symbol, "5m", start, end)
+        return bars, f"real {symbol} 5m via Yahoo Finance"
+    except Exception as error:  # network down / outside Yahoo's ~60-day window
+        return synthetic_bars(start, end), f"SYNTHETIC fallback (fetch failed: {error})"
+
+
 def main() -> None:
+    symbol = "EURUSD"
     start, end = date(2026, 5, 1), date(2026, 5, 29)
     strategy = MultiTimeframeRsiStrategy()
-    closes = synthetic_closes(start, end)
-    result = run_backtest(closes, strategy)
 
-    print(f"Backtest {start} -> {end}  (synthetic EURUSD, entry 5m / trend 4h)")
-    print(f"  bars (5m closes):  {len(closes)}")
+    bars, source = _load_bars(symbol, start, end)
+    result = run_backtest(bars, strategy)
+
+    print(f"Backtest {start} -> {end}  ({symbol}, entry 5m / trend 4h)")
+    print(f"  data source:       {source}")
+    print(f"  bars (5m closes):  {len(bars)}")
     print(f"  trades:            {result.trades}")
     print(f"  win rate:          {result.win_rate * 100:.1f}%")
     print(f"  total return:      {result.total_return_pct:+.2f}%")

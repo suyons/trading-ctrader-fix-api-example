@@ -42,6 +42,7 @@ src/
   market_data.py     Tick -> candle aggregation + providers
   strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
   backtest.py        Replay the strategy over a historical OHLCV series
+  history.py         Fetch real historical bars (Yahoo Finance, no API key)
   ctrader_client.py  High-level client: buy/sell/limit/positions/orders
   fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
   stream_buffer.py   Byte buffer reassembling FIX messages off the socket
@@ -81,6 +82,7 @@ Pipeline: `market_data` (fetch) → `strategy` (decide) → `ctrader_client`
   names. Match the surrounding style.
 - Intentional shortcuts are marked with `ponytail:` comments naming the ceiling.
 - Non-trivial logic ships with a runnable check under `tests/` (no heavy
-  fixtures; deterministic, fast).
+  fixtures; deterministic, fast). **Tests stay offline** — never hit the network;
+  the backtest fetches real data only in `main()` (synthetic fallback elsewhere).
 - Commit messages explain the *why*; commit/push only the relevant change set.
   Markets are closed on weekends, so live FIX validation needs market hours.

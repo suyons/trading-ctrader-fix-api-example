@@ -55,6 +55,7 @@ src/
   market_data.py     Tick -> candle aggregation + providers (FixCandleFeed / sample)
   strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
   backtest.py        Replay the strategy over a historical OHLCV series
+  history.py         Fetch real historical bars (Yahoo Finance, no API key)
   ctrader_client.py  High-level client: buy/sell/limit/positions/orders
   fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
   stream_buffer.py   Byte buffer that reassembles FIX messages off the socket
@@ -177,36 +178,37 @@ PYTHONPATH=src uv run python tests/test_strategy.py   # zero-dependency self-che
 ## Backtest
 
 `src/backtest.py` walks a historical OHLCV series bar by bar, reusing the live
-decision rule with no lookahead (the trend RSI at each bar comes only from
-already-completed 4h blocks). Position model: *flip on opposite signal* — long
-until a SELL, short until a BUY, no pyramiding — and the open position is closed
-on the final bar.
+decision rule with no lookahead (the trend RSI at each bar is built only from 4h
+blocks that have already closed, bucketed by real timestamp). Position model:
+*flip on opposite signal* — long until a SELL, short until a BUY, no pyramiding —
+and the open position is closed on the final bar.
 
 ```bash
 uv run python src/backtest.py
 ```
 
-> ⚠️ **Synthetic data — illustrative only.** cTrader FIX has no history endpoint,
-> so the bundled run uses a deterministic seeded random walk, **not** real
-> prices. The numbers below measure the engine, not the strategy's real edge.
-> Swap `synthetic_closes` for a real history feed to backtest on actual market
-> data — the engine is unchanged.
+Real prices come from Yahoo Finance via `src/history.py` (`EURUSD=X`, stdlib
+`urllib`, no API key). Yahoo only retains intraday data for ~60 days, so for
+windows older than that the fetch fails and the backtest falls back to a
+deterministic synthetic series — the engine is identical either way.
 
-Result for **2026-05-01 → 2026-05-29** (synthetic EURUSD, entry 5m / trend 4h,
-RSI 21, oversold 40 / mid 50 / overbought 60):
+Result for **2026-05-01 → 2026-05-29** — **real EURUSD 5m data** (entry 5m /
+trend 4h, RSI 21, oversold 40 / mid 50 / overbought 60), fetched 2026-06-20:
 
 | Metric            | Value     |
 | ----------------- | --------: |
-| Bars (5m closes)  | 6048      |
-| Trades            | 13        |
-| Win rate          | 46.2%     |
-| Total return      | −0.27%    |
-| Profit factor     | 0.90      |
-| Max drawdown      | 1.34%     |
+| Bars (5m closes)  | 5880      |
+| Trades            | 9         |
+| Win rate          | 22.2%     |
+| Total return      | −0.28%    |
+| Profit factor     | 0.78      |
+| Max drawdown      | 0.66%     |
 
-A slightly negative result on a zero-drift random walk is expected — with no real
-trend to catch and no trading costs modelled, the strategy hovers around
-break-even. Real data (and spread/commission) would tell a different story.
+> ⚠️ Illustrative, not advice. This is a single instrument over a short window
+> with **no spread/commission/slippage** modelled and a naive flip-on-signal exit
+> — it is not evidence of an edge. The slightly negative return is unsurprising:
+> a plain RSI mean-reversion rule with no costs hovers near break-even. Use it to
+> validate the pipeline, then test your own rules, costs, and timeframes.
 
 ## Disclaimer
 
