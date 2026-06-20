@@ -1,16 +1,9 @@
 # trading-ctrader-fix-api-example
 
 A small, self-contained example of trading on **cTrader over the FIX 4.4 API**,
-driven by a **multi-timeframe RSI** strategy. It is a fork of
-[ejtraderLabs/ejtraderCT](https://github.com/ejtraderLabs/ejtraderCT) — the FIX
-session code originates there; this repo trims it down and adds a clean,
-testable decision engine.
+driven by a **multi-timeframe RSI** strategy for an example.
 
-> Earlier versions received trade signals as TradingView webhooks (behind nginx)
-> and forwarded a Telegram notification per order. That plumbing is gone: the bot
-> now makes its own decisions, so there is no web server and no Telegram.
-
-## The strategy
+## The example strategy
 
 The decision engine reproduces the "Multi Timeframe RSI" indicator the project
 grew from. Two timeframes, one role each:
@@ -36,14 +29,15 @@ implementation.
 ## Project layout
 
 ```
-config.py          Load FIX credentials from .env (fails fast if missing)
-strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
-example_trade.py   Runnable example: evaluate the strategy, optionally trade
-ctrader_client.py  High-level client: buy/sell/limit/positions/orders
-fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
-stream_buffer.py   Byte buffer that reassembles FIX messages off the socket
-symbols.py         Default symbol id / pip-position reference table
-calculations.py    Spread, pip value and commission helpers
+src/
+  config.py          Load FIX credentials from .env (fails fast if missing)
+  strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
+  example_trade.py   Runnable example: evaluate the strategy, optionally trade
+  ctrader_client.py  High-level client: buy/sell/limit/positions/orders
+  fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
+  stream_buffer.py   Byte buffer that reassembles FIX messages off the socket
+  symbols.py         Default symbol id / pip-position reference table
+  calculations.py    Spread, pip value and commission helpers
 tests/
   test_strategy.py   Behaviour checks for the decision engine
 ```
@@ -62,7 +56,7 @@ cp .env.example .env          # then fill in your cTrader FIX credentials
 ## Usage
 
 ```bash
-uv run python example_trade.py   # evaluate the strategy and print the signal
+uv run python src/example_trade.py   # evaluate the strategy and print the signal
 ```
 
 By default it only prints the decision. To actually place orders, set

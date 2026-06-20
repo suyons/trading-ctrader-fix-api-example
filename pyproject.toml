@@ -11,9 +11,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 
-# Flat application layout: run the modules directly, nothing to build/install.
+# src-layout application: run the modules from src/, nothing to build/install.
 [tool.uv]
 package = false
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src"]
