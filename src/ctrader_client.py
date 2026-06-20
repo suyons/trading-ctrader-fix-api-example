@@ -25,6 +25,7 @@ class Ctrader:
         spread=0.00005,
         debug=False,
         use_ssl=True,
+        login_timeout=15,
     ):
         """AI is creating summary for __init__
 
@@ -35,6 +36,10 @@ class Ctrader:
             spread ([int]): [example 0.00010 default 0.00005]
             password ([str]): [example 12345678 need to setup when you create api on ctrader platform]
             use_ssl ([bool]): [True -> TLS ports 5211/5212, False -> plain 5201/5202]
+            login_timeout ([float]): [seconds to wait for connect + login before raising]
+
+        Raises:
+            TimeoutError: if connecting or logging in exceeds ``login_timeout``.
         """
         if debug:
             logging.getLogger().setLevel(logging.INFO)
@@ -63,6 +68,7 @@ class Ctrader:
             self.position_list_callback,
             self.order_list_callback,
             use_ssl=use_ssl,
+            login_timeout=login_timeout,
         )
         self.market_data_list = {}
         self.symbol_table = SYMBOLSLIST["default"]

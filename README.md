@@ -159,6 +159,10 @@ for c in candles:
 > would take weeks). For those, plug a real history API into the same interface.
 > Volume is the tick count, since FIX top-of-book carries no traded volume.
 
+`Ctrader(...)` bounds connect + login by `login_timeout` (default 15s) and raises
+`TimeoutError` if it doesn't complete — so a closed market or unreachable broker
+fails fast instead of hanging.
+
 ## Tests
 
 ```bash

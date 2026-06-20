@@ -208,12 +208,24 @@ class FIX:
             return pformat([(k.name, v) for k, v in self.fields])
 
     @staticmethod
-    def _open_socket(server: str, port: int, use_ssl: bool):
-        sock = socket.create_connection((server, port))
+    def _open_socket(server: str, port: int, use_ssl: bool, timeout=None):
+        # `timeout` bounds the connect + TLS handshake; the streaming workers then
+        # run in blocking mode (settimeout(None)), waiting on recv indefinitely.
+        sock = socket.create_connection((server, port), timeout=timeout)
         if use_ssl:
             context = ssl.create_default_context()
             sock = context.wrap_socket(sock, server_hostname=server)
+        sock.settimeout(None)
         return sock
+
+    def _close_sockets(self):
+        for attr in ("qs", "ts"):
+            sock = getattr(self, attr, None)
+            if sock is not None:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
 
     def __init__(
         self,
@@ -227,13 +239,14 @@ class FIX:
         order_list_callback,
         update_fix_status=None,
         use_ssl=True,
+        login_timeout=15,
     ):
         try:
             quote_port, trade_port = FIX_PORTS[use_ssl]
             self.qstream = Buffer()
-            self.qs = self._open_socket(server, quote_port, use_ssl)
+            self.qs = self._open_socket(server, quote_port, use_ssl, login_timeout)
             self.tstream = Buffer()
-            self.ts = self._open_socket(server, trade_port, use_ssl)
+            self.ts = self._open_socket(server, trade_port, use_ssl, login_timeout)
             self.broker = broker
             self.login = login
             self.password = password
@@ -272,10 +285,15 @@ class FIX:
             self.sec_list_evt = threading.Event()
             self.thread_sec_list = threading.Thread(target=self.sec_list)
             self.thread_sec_list.start()
-            self.sec_list_evt.wait()
+            if not self.sec_list_evt.wait(login_timeout):
+                raise TimeoutError(
+                    f"FIX login timed out after {login_timeout}s — the market may "
+                    "be closed, or the host/credentials are wrong."
+                )
         except Exception as e:
-            # Code to handle the exception
             logging.error(f"{e}")
+            self._close_sockets()  # unblock the recv loops so threads can exit
+            raise
 
     def qworker(self):
         while True:
