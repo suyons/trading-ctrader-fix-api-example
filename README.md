@@ -10,9 +10,8 @@ driven by a **multi-timeframe RSI** strategy. It connects directly to a broker's
 cTrader FIX endpoints — no TradingView webhook, no web server, no third-party
 relay — evaluates a signal, and (optionally) places the order itself.
 
-> **Heads up — this is an educational example.** It defaults to a *demo* account
-> and to *not* placing live orders. Read the [disclaimer](#disclaimer) before
-> pointing it at real money.
+> **Heads up — this is an educational example.** Start with a *demo* account.
+> Read the [disclaimer](#disclaimer) before pointing it at real money.
 
 ## Features
 
@@ -22,7 +21,6 @@ relay — evaluates a signal, and (optionally) places the order itself.
 - 🧩 **Decoupled design** — the decision engine takes price data and returns
   `BUY` / `SELL` / `HOLD`; bring your own candle feed.
 - 🔑 **`.env`-based credentials** laid out to mirror the cTrader FIX API panel.
-- 🛟 **Safety switch** so the example can't fire real orders by accident.
 
 ## The example strategy
 
@@ -90,7 +88,6 @@ three values across.
 | `CTRADER_PASSWORD`       |    ✅    |    —    | Your FIX API / account password                                    |
 | `CTRADER_USE_SSL`        |    —     | `true`  | `true` → TLS ports 5211/5212, `false` → plain text 5201/5202       |
 | `CTRADER_CURRENCY`       |    —     | `USD`   | Account deposit currency                                           |
-| `CTRADER_LIVE_TRADING`   |    —     | `false` | Safety switch — only `true` lets the example place real orders     |
 
 FIX ports, selected automatically from `CTRADER_USE_SSL`:
 
@@ -102,12 +99,13 @@ FIX ports, selected automatically from `CTRADER_USE_SSL`:
 ## Usage
 
 ```bash
-uv run python src/example_trade.py   # evaluate the strategy and print the signal
+uv run python src/example_trade.py   # evaluate the strategy and act on the signal
 ```
 
-By default it only prints the decision. To actually place orders, set
-`CTRADER_LIVE_TRADING=true` in `.env` (and supply a real OHLC feed — see the note
-in `src/example_trade.py`).
+It evaluates the strategy and prints the signal; when the signal is `BUY` or
+`SELL` it connects over FIX and places the order — so point it at a **demo**
+account, and swap the placeholder closes for a real OHLC feed (see the note in
+`src/example_trade.py`).
 
 Using the pieces directly:
 

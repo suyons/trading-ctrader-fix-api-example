@@ -1,10 +1,11 @@
-"""Runnable example: evaluate the strategy and (optionally) route it to cTrader.
+"""Runnable example: evaluate the strategy and route it to cTrader.
 
-    uv run ctrader-example
+    uv run python src/example_trade.py
 
 Loads credentials from .env, evaluates :class:`MultiTimeframeRsiStrategy` on a
-set of closing prices, prints the resulting signal, and — only when
-``CTRADER_LIVE_TRADING=true`` — connects over FIX and places the order.
+set of closing prices, prints the resulting signal, and — when the signal is
+actionable — connects over FIX and places the order. Run it against a demo
+account.
 
 Decision is intentionally decoupled from market data: feed it closes from any
 source. ponytail: the sample closes below are placeholders. Wire your own OHLC
@@ -14,7 +15,6 @@ candle source and replace ``sample_*_closes``.
 """
 
 import logging
-import os
 
 from config import load_config
 from strategy import MultiTimeframeRsiStrategy, Signal
@@ -47,8 +47,7 @@ def main() -> None:
     signal = strategy.decide(sample_entry_closes(), sample_trend_closes())
     print(f"{SYMBOL} signal: {signal.value}")
 
-    if os.environ.get("CTRADER_LIVE_TRADING", "").lower() != "true":
-        print("Live trading disabled (set CTRADER_LIVE_TRADING=true to place orders).")
+    if signal is Signal.HOLD:
         return
 
     from ctrader_client import Ctrader
