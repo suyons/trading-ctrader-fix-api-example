@@ -84,8 +84,14 @@ class MultiTimeframeRsiStrategy:
         if previous is None:
             raise ValueError("need at least one more entry close for a crossover")
 
-        crossed_up = previous <= self.oversold < current
-        crossed_down = previous >= self.overbought > current
+        return self.signal_from_rsi(trend_rsi, previous, current)
+
+    def signal_from_rsi(
+        self, trend_rsi: float, previous_entry_rsi: float, current_entry_rsi: float
+    ) -> Signal:
+        """The core rule, on already-computed RSI values (reused by the backtest)."""
+        crossed_up = previous_entry_rsi <= self.oversold < current_entry_rsi
+        crossed_down = previous_entry_rsi >= self.overbought > current_entry_rsi
 
         if trend_rsi > self.midline and crossed_up:
             return Signal.BUY

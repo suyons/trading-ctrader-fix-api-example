@@ -41,6 +41,7 @@ src/
   config.py          Load FIX credentials from .env (fails fast if missing)
   market_data.py     Tick -> candle aggregation + providers
   strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
+  backtest.py        Replay the strategy over a historical OHLCV series
   ctrader_client.py  High-level client: buy/sell/limit/positions/orders
   fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
   stream_buffer.py   Byte buffer reassembling FIX messages off the socket
