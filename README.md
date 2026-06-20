@@ -36,15 +36,14 @@ implementation.
 ## Project layout
 
 ```
-src/ctrader_fix/
-  config.py          Load FIX credentials from .env (fails fast if missing)
-  strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
-  example_trade.py   Runnable example: evaluate the strategy, optionally trade
-  ctrader_client.py  High-level client: buy/sell/limit/positions/orders
-  fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
-  stream_buffer.py   Byte buffer that reassembles FIX messages off the socket
-  symbols.py         Default symbol id / pip-position reference table
-  calculations.py    Spread, pip value and commission helpers
+config.py          Load FIX credentials from .env (fails fast if missing)
+strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
+example_trade.py   Runnable example: evaluate the strategy, optionally trade
+ctrader_client.py  High-level client: buy/sell/limit/positions/orders
+fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
+stream_buffer.py   Byte buffer that reassembles FIX messages off the socket
+symbols.py         Default symbol id / pip-position reference table
+calculations.py    Spread, pip value and commission helpers
 tests/
   test_strategy.py   Behaviour checks for the decision engine
 ```
@@ -63,7 +62,7 @@ cp .env.example .env          # then fill in your cTrader FIX credentials
 ## Usage
 
 ```bash
-uv run ctrader-example        # evaluate the strategy and print the signal
+uv run python example_trade.py   # evaluate the strategy and print the signal
 ```
 
 By default it only prints the decision. To actually place orders, set
@@ -73,7 +72,9 @@ in `example_trade.py`).
 Using the pieces directly:
 
 ```python
-from ctrader_fix import MultiTimeframeRsiStrategy, Signal, Ctrader, load_config
+from strategy import MultiTimeframeRsiStrategy, Signal
+from ctrader_client import Ctrader
+from config import load_config
 
 strategy = MultiTimeframeRsiStrategy()
 signal = strategy.decide(entry_closes, trend_closes)   # closes oldest -> newest

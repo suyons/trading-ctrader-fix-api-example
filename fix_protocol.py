@@ -14,7 +14,7 @@ import time
 from enum import IntEnum, Enum
 import socket
 from pprint import pformat
-from .stream_buffer import Buffer
+from stream_buffer import Buffer
 
 
 class Field(IntEnum):

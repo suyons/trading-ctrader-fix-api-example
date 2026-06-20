@@ -10,8 +10,8 @@ import json
 import time
 import random
 from operator import itemgetter
-from .fix_protocol import FIX, Side, OrderType
-from .symbols import SYMBOLSLIST
+from fix_protocol import FIX, Side, OrderType
+from symbols import SYMBOLSLIST
 
 
 class Ctrader:

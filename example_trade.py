@@ -16,8 +16,8 @@ candle source and replace ``sample_*_closes``.
 import logging
 import os
 
-from .config import load_config
-from .strategy import MultiTimeframeRsiStrategy, Signal
+from config import load_config
+from strategy import MultiTimeframeRsiStrategy, Signal
 
 SYMBOL = "EURUSD"
 VOLUME = 0.01
@@ -51,7 +51,7 @@ def main() -> None:
         print("Live trading disabled (set CTRADER_LIVE_TRADING=true to place orders).")
         return
 
-    from .ctrader_client import Ctrader
+    from ctrader_client import Ctrader
 
     config = load_config()
     client = Ctrader(

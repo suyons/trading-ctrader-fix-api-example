@@ -3,7 +3,7 @@
 Run with ``uv run pytest`` (or ``python -m pytest``).
 """
 
-from ctrader_fix.strategy import MultiTimeframeRsiStrategy, Signal, rsi_series
+from strategy import MultiTimeframeRsiStrategy, Signal, rsi_series
 
 
 def _rsi(values, length):
