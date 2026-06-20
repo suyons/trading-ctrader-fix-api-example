@@ -16,6 +16,8 @@ relay — evaluates a signal, and (optionally) places the order itself.
 ## Features
 
 - 🔌 **Pure-stdlib FIX 4.4 client** for cTrader (QUOTE + TRADE sessions).
+- 🕯️ **Tick → candle aggregation** — build live OHLCV bars from the FIX quote
+  stream (`FixCandleFeed`), or run offline with synthetic data.
 - 🔒 **TLS by default** (ports 5211/5212), with a one-line fallback to plain text.
 - 📈 **Multi-timeframe RSI strategy** as a small, pure, unit-tested function.
 - 🧩 **Decoupled pipeline** — `main.py` orchestrates *fetch → decide → execute*,
@@ -48,7 +50,7 @@ limit order plotted on `OANDA:EURUSD`:
 src/
   main.py            Orchestrator: fetch OHLCV -> decide -> execute
   config.py          Load FIX credentials from .env (fails fast if missing)
-  market_data.py     Fetch OHLCV closes per symbol/timeframe (the data seam)
+  market_data.py     Tick -> candle aggregation + providers (FixCandleFeed / sample)
   strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
   ctrader_client.py  High-level client: buy/sell/limit/positions/orders
   fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
@@ -56,6 +58,7 @@ src/
   symbols.py         Default symbol id / pip-position reference table
   calculations.py    Spread, pip value and commission helpers
 tests/
+  test_market_data.py  Tick -> candle aggregation checks
   test_strategy.py   Behaviour checks for the decision engine
   test_pipeline.py   Wiring check: sample data -> strategy -> signal
 ```
@@ -127,6 +130,34 @@ if signal is not Signal.HOLD:
     )
     (client.buy if signal is Signal.BUY else client.sell)("EURUSD", 0.01, 0, 0)
 ```
+
+### Live OHLCV from FIX ticks
+
+`FixCandleFeed` subscribes to the live FIX quote stream and aggregates ticks into
+OHLCV candles. It returns the same `fetch_closes` interface, so it drops straight
+into the pipeline:
+
+```python
+from ctrader_client import Ctrader
+from market_data import FixCandleFeed
+from config import load_config
+
+config = load_config()
+client = Ctrader(config.host, config.sender_comp_id, config.password,
+                 use_ssl=config.use_ssl)
+feed = FixCandleFeed(client)
+
+candles = feed.fetch_ohlcv("XAUUSD", "1m", count=10)   # latest 10 one-minute bars
+for c in candles:
+    print(c.timestamp, c.open, c.high, c.low, c.close, c.volume)
+```
+
+> **Ceiling:** ticks only aggregate *forward* from the moment you subscribe —
+> there is no backfill — so `fetch_ohlcv(count=10)` blocks for ~10 minutes while
+> ten 1m bars form, and only works while the market is open. It suits low
+> timeframes over a session, not deep history or high timeframes (200× 4h bars
+> would take weeks). For those, plug a real history API into the same interface.
+> Volume is the tick count, since FIX top-of-book carries no traded volume.
 
 ## Tests
 
