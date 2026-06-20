@@ -1,11 +1,17 @@
-# from locale import currency
+"""High-level cTrader trading client.
+
+Wraps the raw FIX 4.4 session (:mod:`fix_protocol`) with convenient
+``buy``/``sell``/``buyLimit``/... methods, position/order bookkeeping and
+live quote subscriptions. This is the object an application interacts with.
+"""
+
 import logging
 import json
 import time
 import random
 from operator import itemgetter
-from .fix import FIX, Side, OrderType
-from .symbol import SYMBOLSLIST
+from .fix_protocol import FIX, Side, OrderType
+from .symbols import SYMBOLSLIST
 
 
 class Ctrader:

@@ -1,3 +1,9 @@
+"""A growable byte buffer for reassembling FIX messages off the socket.
+
+TCP delivers FIX bytes in arbitrary chunks; this buffer accumulates them so the
+parser can ``peek`` for a complete message and ``read`` it out once found.
+"""
+
 
 class Buffer:
     def __init__(self):

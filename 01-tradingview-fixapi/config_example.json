@@ -1,7 +1,0 @@
-{
-  "Host": "abc.d.ctrader.com",
-  "SenderCompID": "demo.yourbroker.1234567",
-  "Password": "YOUR_PASSWORD",
-  "TelegramBotToken": "123456789:ABCdefGhIjKlMnOpQrStUvWxYz1234567890",
-  "TelegramChatID": "1234567890"
-}

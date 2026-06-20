@@ -1,3 +1,5 @@
+# Static symbol reference table: maps cTrader symbol ids to name and pip
+# position. Used as the default lookup before the live security list arrives.
 SYMBOLSLIST = {
     'default': {
         1: {'id': 1, 'pip_position': 4, 'name': 'EURUSD', 'bid_volume': 0, 'ask_volume': 0},

@@ -1,12 +1,20 @@
+"""FIX 4.4 protocol session for cTrader.
+
+Encodes/decodes FIX messages and runs the two long-lived socket sessions that
+cTrader exposes (QUOTE on port 5201, TRADE on 5202): logon, heartbeats,
+security list, market-data subscriptions, order entry and position reports.
+:class:`Ctrader` in :mod:`ctrader_client` is the friendly wrapper over this.
+"""
+
 import logging
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 from enum import IntEnum, Enum
 import socket
 from pprint import pformat
-from .buffer import Buffer
+from .stream_buffer import Buffer
 
 
 class Field(IntEnum):
@@ -115,7 +123,7 @@ class OrderType(IntEnum):
 
 
 def get_time():
-    return datetime.utcnow().strftime("%Y%m%d-%H:%M:%S")
+    return datetime.now(timezone.utc).strftime("%Y%m%d-%H:%M:%S")
 
 
 class FIX:
@@ -344,7 +352,8 @@ class FIX:
     def process_logout(self, msg):
         if not msg[Field.Text]:
             self.logged = False
-        self.update_fix_status(self.client_id, self.logged)
+        if self.update_fix_status:
+            self.update_fix_status(self.client_id, self.logged)
 
     def process_exec_report(self, msg):
         if msg[Field.ExecType] == "F":

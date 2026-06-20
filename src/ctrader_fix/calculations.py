@@ -1,3 +1,5 @@
+# Small numeric helpers for FX maths: spread (in pips), pip value and round-turn
+# commission. Kept dependency-free so they are trivially unit-testable.
 __all__ = ['calculate_commission', 'calculate_pip_value', 'calculate_spread']
 
 
