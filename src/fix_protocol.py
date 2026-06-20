@@ -258,9 +258,9 @@ class FIX:
             self.ttest_seq = 1
             self.market_seq = 1
             self.subscribed_symbol = [-1, -1, -1]
-            self.qworker_thread = threading.Thread(target=self.qworker)
+            self.qworker_thread = threading.Thread(target=self.qworker, daemon=True)
             self.qworker_thread.start()
-            self.tworker_thread = threading.Thread(target=self.tworker)
+            self.tworker_thread = threading.Thread(target=self.tworker, daemon=True)
             self.tworker_thread.start()
             self.ping_qworker_thread = None
             self.ping_tworker_thread = None
@@ -283,7 +283,7 @@ class FIX:
             self.logged = False
             self.logon()
             self.sec_list_evt = threading.Event()
-            self.thread_sec_list = threading.Thread(target=self.sec_list)
+            self.thread_sec_list = threading.Thread(target=self.sec_list, daemon=True)
             self.thread_sec_list.start()
             if not self.sec_list_evt.wait(login_timeout):
                 raise TimeoutError(
@@ -434,14 +434,14 @@ class FIX:
         if msg[Field.SenderSubID] == "QUOTE":
             logging.info("Quote logged on")
             self.ping_qworker_thread = threading.Thread(
-                target=self.ping_qworker, args=[int(msg[Field.HeartBtInt])]
+                target=self.ping_qworker, args=[int(msg[Field.HeartBtInt])], daemon=True
             )
             self.ping_qworker_thread.start()
             self.logged = True
         elif msg[Field.SenderSubID] == "TRADE":
             logging.info("Trade logged on")
             self.ping_tworker_thread = threading.Thread(
-                target=self.ping_tworker, args=[int(msg[Field.HeartBtInt])]
+                target=self.ping_tworker, args=[int(msg[Field.HeartBtInt])], daemon=True
             )
             self.ping_tworker_thread.start()
 
