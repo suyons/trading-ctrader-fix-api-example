@@ -258,9 +258,17 @@ class FIX:
             self.ttest_seq = 1
             self.market_seq = 1
             self.subscribed_symbol = [-1, -1, -1]
-            self.qworker_thread = threading.Thread(target=self.qworker, daemon=True)
+            self.qworker_thread = threading.Thread(
+                target=self._read_loop,
+                args=(self.qs, self.qstream, "\033[32m", "Quote"),
+                daemon=True,
+            )
             self.qworker_thread.start()
-            self.tworker_thread = threading.Thread(target=self.tworker, daemon=True)
+            self.tworker_thread = threading.Thread(
+                target=self._read_loop,
+                args=(self.ts, self.tstream, "\033[92m", "Trade"),
+                daemon=True,
+            )
             self.tworker_thread.start()
             self.ping_qworker_thread = None
             self.ping_tworker_thread = None
@@ -295,80 +303,40 @@ class FIX:
             self._close_sockets()  # unblock the recv loops so threads can exit
             raise
 
-    def qworker(self):
+    def _read_loop(self, sock, stream: Buffer, color: str, label: str):
+        """Recv bytes for one session (QUOTE or TRADE) and dispatch each message."""
         while True:
             try:
-                data = self.qs.recv(65535)
+                data = sock.recv(65535)
             except Exception as e:
                 logging.info(e)
                 break
             if len(data) == 0:
-                logging.info("Quote Logged out")
+                logging.info("%s logged out", label)
                 break
             try:
-                self.qstream.write(data)
-                self.parse_quote_message()
+                stream.write(data)
+                self._parse_messages(stream, color)
             except Exception as e:
-                logging.info(f"Market is Close or Disconnected {e}")
+                logging.info("%s stream closed or disconnected: %s", label, e)
                 break
 
-    def tworker(self):
-        while True:
-            try:
-                data = self.ts.recv(65535)
-            except Exception as e:
-                logging.info(e)
+    def _parse_messages(self, stream: Buffer, color: str):
+        while len(stream) > 0:
+            match = re.search(rb"10=\d{3}\x01", stream.peek(stream.count()))
+            if not match:
                 break
-            if len(data) == 0:
-                logging.info("Trade Logged out")
-                break
-            try:
-                self.tstream.write(data)
-                self.parse_trade_message()
-            except Exception as e:
-                logging.info(f"Market is Close or Logged out {e}")
-                break
+            msg = FIX.Message()
+            data = stream.read(match.span()[1]).split(b"\x01")[:-1]
+            for part in data:
+                tag, value = part.split(b"=", 1)
+                msg[Field(int(tag.decode()))] = value.decode()
+            logging.debug("%sRECV <<< %s\033[0m" % (color, msg))
+            self.process_message(msg)
 
-    def parse_quote_message(self):
-        while len(self.qstream) > 0:
-            match = re.search(rb"10=\d{3}\x01", self.qstream.peek(self.qstream.count()))
-            if match:
-                msg = FIX.Message()
-                data = self.qstream.read(match.span()[1]).split(b"\x01")[:-1]
-                for part in data:
-                    tag, value = part.split(b"=", 1)
-                    msg[Field(int(tag.decode()))] = value.decode()
-                logging.debug("\033[32mRECV <<< %s\033[0m" % msg)
-                self.process_message(msg)
-            else:
-                break
-
-    def parse_trade_message(self):
-        while len(self.tstream) > 0:
-            match = re.search(rb"10=\d{3}\x01", self.tstream.peek(self.tstream.count()))
-            if match:
-                msg = FIX.Message()
-                data = self.tstream.read(match.span()[1]).split(b"\x01")[:-1]
-                for part in data:
-                    tag, value = part.split(b"=", 1)
-                    msg[Field(int(tag.decode()))] = value.decode()
-                logging.debug("\033[92mRECV <<< %s\033[0m" % msg)
-                self.process_message(msg)
-            else:
-                break
-
-    def ping_qworker(self, interval: int):
-        while True:
-            if self.qs._closed:
-                break
-            self.qheartbeat()
-            time.sleep(interval)
-
-    def ping_tworker(self, interval: int):
-        while True:
-            if self.ts._closed:
-                break
-            self.theartbeat()
+    def _ping_loop(self, sock, sub: SubID, interval: int):
+        while not sock._closed:
+            self._heartbeat(sub)
             time.sleep(interval)
 
     def process_ping(self, msg):
@@ -376,9 +344,9 @@ class FIX:
 
     def process_test(self, msg):
         if msg[Field.SenderSubID] == "QUOTE":
-            self.qheartbeat(msg[Field.TestReqID])
+            self._heartbeat(SubID.QUOTE, msg[Field.TestReqID])
         elif msg[Field.SenderSubID] == "TRADE":
-            self.theartbeat(msg[Field.TestReqID])
+            self._heartbeat(SubID.TRADE, msg[Field.TestReqID])
 
     def process_logout(self, msg):
         if not msg[Field.Text]:
@@ -434,14 +402,18 @@ class FIX:
         if msg[Field.SenderSubID] == "QUOTE":
             logging.info("Quote logged on")
             self.ping_qworker_thread = threading.Thread(
-                target=self.ping_qworker, args=[int(msg[Field.HeartBtInt])], daemon=True
+                target=self._ping_loop,
+                args=(self.qs, SubID.QUOTE, int(msg[Field.HeartBtInt])),
+                daemon=True,
             )
             self.ping_qworker_thread.start()
             self.logged = True
         elif msg[Field.SenderSubID] == "TRADE":
             logging.info("Trade logged on")
             self.ping_tworker_thread = threading.Thread(
-                target=self.ping_tworker, args=[int(msg[Field.HeartBtInt])], daemon=True
+                target=self._ping_loop,
+                args=(self.ts, SubID.TRADE, int(msg[Field.HeartBtInt])),
+                daemon=True,
             )
             self.ping_tworker_thread.start()
 
@@ -591,14 +563,8 @@ class FIX:
                 )
                 self.ts.close()
 
-    def qheartbeat(self, test_id: int = None):
-        msg = FIX.Message(SubID.QUOTE, "0", self)
-        if test_id:
-            msg[Field.TestReqID] = test_id
-        self.send_message(msg)
-
-    def theartbeat(self, test_id: int = None):
-        msg = FIX.Message(SubID.TRADE, "0", self)
+    def _heartbeat(self, sub: SubID, test_id: int = None):
+        msg = FIX.Message(sub, "0", self)
         if test_id:
             msg[Field.TestReqID] = test_id
         self.send_message(msg)
