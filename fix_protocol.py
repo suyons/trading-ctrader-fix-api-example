@@ -1,13 +1,15 @@
 """FIX 4.4 protocol session for cTrader.
 
 Encodes/decodes FIX messages and runs the two long-lived socket sessions that
-cTrader exposes (QUOTE on port 5201, TRADE on 5202): logon, heartbeats,
+cTrader exposes: QUOTE and TRADE. With TLS (the default) these are ports
+5211/5212; in plain text they are 5201/5202. Handles logon, heartbeats,
 security list, market-data subscriptions, order entry and position reports.
 :class:`Ctrader` in :mod:`ctrader_client` is the friendly wrapper over this.
 """
 
 import logging
 import re
+import ssl
 import threading
 from datetime import datetime, timezone
 import time
@@ -15,6 +17,9 @@ from enum import IntEnum, Enum
 import socket
 from pprint import pformat
 from stream_buffer import Buffer
+
+# cTrader FIX ports, keyed by whether TLS is used: (QUOTE, TRADE).
+FIX_PORTS = {True: (5211, 5212), False: (5201, 5202)}
 
 
 class Field(IntEnum):
@@ -202,6 +207,14 @@ class FIX:
         def __repr__(self):
             return pformat([(k.name, v) for k, v in self.fields])
 
+    @staticmethod
+    def _open_socket(server: str, port: int, use_ssl: bool):
+        sock = socket.create_connection((server, port))
+        if use_ssl:
+            context = ssl.create_default_context()
+            sock = context.wrap_socket(sock, server_hostname=server)
+        return sock
+
     def __init__(
         self,
         server: str,
@@ -213,14 +226,14 @@ class FIX:
         position_list_callback,
         order_list_callback,
         update_fix_status=None,
+        use_ssl=True,
     ):
         try:
+            quote_port, trade_port = FIX_PORTS[use_ssl]
             self.qstream = Buffer()
-            self.qs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.qs.connect((server, 5201))
+            self.qs = self._open_socket(server, quote_port, use_ssl)
             self.tstream = Buffer()
-            self.ts = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.ts.connect((server, 5202))
+            self.ts = self._open_socket(server, trade_port, use_ssl)
             self.broker = broker
             self.login = login
             self.password = password

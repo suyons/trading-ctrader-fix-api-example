@@ -55,7 +55,11 @@ def main() -> None:
 
     config = load_config()
     client = Ctrader(
-        config.host, config.sender_comp_id, config.password, config.currency
+        config.host,
+        config.sender_comp_id,
+        config.password,
+        config.currency,
+        use_ssl=config.use_ssl,
     )
     route_signal(client, signal)
 
