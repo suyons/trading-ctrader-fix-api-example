@@ -1,38 +1,52 @@
-"""Entry point: orchestrate fetch OHLCV -> decide -> execute.
+"""Entry point: stream FIX ticks -> tick strategy -> execute (FIX only).
 
     uv run python src/main.py
 
-Wires the three responsibilities together, one module each:
-    market_data.MarketDataProvider     fetch OHLCV closes
-    strategy.MultiTimeframeRsiStrategy  make the BUY / SELL / HOLD decision
-    ctrader_client.Ctrader              execute the trade over FIX
-
-Out of the box it uses ``SampleMarketData`` so the pipeline runs offline; swap in
-a real provider (see ``market_data.py``) and point it at a demo account.
+A pure FIX pipeline: subscribe to the live bid/ask quote stream, feed every tick
+to :class:`TickMomentumStrategy`, and route BUY/SELL to the FIX trade session. No
+candles, no history, no external data — the point is to exercise the cTrader FIX
+API as the tick-based, low-latency interface it is. Run against a demo account.
 """
 
 import logging
+import time
 
 from config import load_config
-from market_data import MarketDataProvider, SampleMarketData
-from strategy import MultiTimeframeRsiStrategy, Signal
+from ctrader_client import Ctrader
+from strategy import Signal, TickMomentumStrategy
 
 SYMBOL = "EURUSD"
 VOLUME = 0.01
-ENTRY_TIMEFRAME = "5m"
-TREND_TIMEFRAME = "4h"
-HISTORY = 200  # closes per timeframe — enough to warm up the RSI
 
 
-def decide_signal(market_data: MarketDataProvider) -> Signal:
-    entry_closes = market_data.fetch_closes(SYMBOL, ENTRY_TIMEFRAME, HISTORY)
-    trend_closes = market_data.fetch_closes(SYMBOL, TREND_TIMEFRAME, HISTORY)
-    return MultiTimeframeRsiStrategy().decide(entry_closes, trend_closes)
+def stream_ticks(client, symbol: str, poll_interval: float = 0.05):
+    """Yield (bid, ask) for each new quote on the FIX spot stream.
+
+    ponytail: polls ``client.quote`` at ``poll_interval`` and dedupes; this can
+    miss ticks between polls. For true HFT, hook the FIX market-data callback
+    directly instead of polling.
+    """
+    client.subscribe(symbol)
+    last = None
+    while True:
+        quote = client.quote(symbol)
+        if isinstance(quote, dict) and "bid" in quote and "ask" in quote:
+            tick = (quote.get("time"), quote["bid"], quote["ask"])
+            if tick != last:
+                last = tick
+                yield quote["bid"], quote["ask"]
+        time.sleep(poll_interval)
 
 
-def execute_trade(signal: Signal) -> None:
-    from ctrader_client import Ctrader
+def execute(client, signal: Signal, symbol: str, volume: float) -> None:
+    if signal is Signal.BUY:
+        client.buy(symbol, volume, 0, 0)
+    elif signal is Signal.SELL:
+        client.sell(symbol, volume, 0, 0)
 
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO)
     config = load_config()
     client = Ctrader(
         config.host,
@@ -41,21 +55,13 @@ def execute_trade(signal: Signal) -> None:
         config.currency,
         use_ssl=config.use_ssl,
     )
-    if signal is Signal.BUY:
-        client.buy(SYMBOL, VOLUME, 0, 0)
-    elif signal is Signal.SELL:
-        client.sell(SYMBOL, VOLUME, 0, 0)
 
-
-def main() -> None:
-    logging.basicConfig(level=logging.INFO)
-
-    signal = decide_signal(SampleMarketData())
-    print(f"{SYMBOL} signal: {signal.value}")
-
-    if signal is Signal.HOLD:
-        return
-    execute_trade(signal)
+    strategy = TickMomentumStrategy()
+    for bid, ask in stream_ticks(client, SYMBOL):
+        signal = strategy.update(bid, ask)
+        if signal is not Signal.HOLD:
+            logging.info("%s signal %s @ bid=%s ask=%s", SYMBOL, signal.value, bid, ask)
+            execute(client, signal, SYMBOL, VOLUME)
 
 
 if __name__ == "__main__":

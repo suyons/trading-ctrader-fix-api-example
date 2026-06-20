@@ -12,18 +12,20 @@ Guidance for Claude Code working in this repository.
 
 ## What this is
 
-A small, educational example of trading on **cTrader over the FIX 4.4 API**,
-driven by a **multi-timeframe RSI** strategy. Fork of
-[ejtraderLabs/ejtraderCT](https://github.com/ejtraderLabs/ejtraderCT) (the FIX
-protocol layer derives from it). No TradingView webhook, no web server, no
-Telegram — it connects straight to the broker, decides, and optionally trades.
+A small, educational **tick-based** trading bot on **cTrader over the FIX 4.4
+API**. Fork of [ejtraderLabs/ejtraderCT](https://github.com/ejtraderLabs/ejtraderCT)
+(the FIX protocol layer derives from it). It streams live bid/ask quotes, decides
+on **every tick**, and executes over the same FIX session — no candles, no
+history, no external data, no web server. The repo deliberately leans into what
+FIX is for (low-latency quotes + execution); OHLCV/history is out of scope (that
+would be cTrader's Open API).
 
 ## Commands
 
 ```bash
 uv sync --extra dev                 # create venv + install deps (incl. pytest)
-uv run pytest -q                    # full test suite
-uv run python src/main.py           # run the pipeline (offline by default)
+uv run pytest -q                    # full test suite (offline)
+uv run python src/main.py           # stream FIX ticks -> decide -> execute (needs market open)
 ```
 
 - Tooling: **uv + pyproject.toml**. The project is a **non-package app**
@@ -37,22 +39,19 @@ Flat modules under `src/` (no package wrapper); **absolute imports** between the
 
 ```
 src/
-  main.py            Orchestrator: fetch OHLCV -> decide -> execute
+  main.py            Orchestrator: stream FIX ticks -> decide -> execute
   config.py          Load FIX credentials from .env (fails fast if missing)
-  market_data.py     Tick -> candle aggregation + providers
-  strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
-  backtest.py        Replay the strategy over a historical OHLCV series
-  history.py         Fetch real historical bars (Yahoo Finance, no API key)
+  strategy.py        TickMomentumStrategy (per-tick BUY / SELL / HOLD) — FIX-only
   ctrader_client.py  High-level client: buy/sell/limit/positions/orders
   fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
   stream_buffer.py   Byte buffer reassembling FIX messages off the socket
   symbols.py         Default symbol id / pip-position reference table
   calculations.py    Spread, pip value, commission helpers
-tests/               test_strategy / test_pipeline / test_market_data / test_login_timeout
+tests/               test_strategy / test_tick_stream / test_login_timeout
 ```
 
-Pipeline: `market_data` (fetch) → `strategy` (decide) → `ctrader_client`
-(execute), wired by `main.py`. Each module owns one responsibility.
+Loop: `main.stream_ticks` (FIX quote stream) → `strategy.update(bid, ask)`
+(decide) → `ctrader_client` (execute). Each module owns one responsibility.
 
 ## Key behaviors & constraints
 
@@ -62,19 +61,16 @@ Pipeline: `market_data` (fetch) → `strategy` (decide) → `ctrader_client`
   is missing.
 - **TLS by default** (`CTRADER_USE_SSL=true`): QUOTE/TRADE ports 5211/5212;
   plain text is 5201/5202. Ports are picked from `FIX_PORTS[use_ssl]`.
-- **No history endpoint.** cTrader FIX streams spot ticks only. `FixCandleFeed`
-  aggregates ticks into OHLCV candles *forward* from subscription (no backfill),
-  so it suits low timeframes over a session, not deep history / high timeframes.
-  `SampleMarketData` provides synthetic closes for offline runs. Candle `volume`
-  is the tick count (FIX top-of-book has no traded volume).
+- **Tick-based, no history.** cTrader FIX streams quotes only — there are no
+  candles/bars. `TickMomentumStrategy.update(bid, ask)` runs per tick (fast/slow
+  EMA crossover of the mid, plus an EMA-of-spread guard) and warms up from the
+  live stream. `main.stream_ticks` polls `client.quote` and dedupes (ponytail:
+  polling can miss ticks; hook the FIX market-data callback for true HFT).
 - **Bounded login.** `Ctrader(..., login_timeout=15)` bounds connect + login and
   raises `TimeoutError` instead of hanging (e.g. closed market / unreachable
   broker). The constructor closes sockets and re-raises rather than swallowing.
 - **Daemon threads.** All FIX worker threads (quote/trade readers, security
   list, heartbeats) are daemon, so the process exits immediately.
-- The strategy needs deep history (default 200 closes on 5m and 4h), which live
-  tick aggregation cannot supply quickly — so `main.py` defaults to
-  `SampleMarketData`. A real history provider would plug into `fetch_closes`.
 
 ## Conventions
 
@@ -82,7 +78,6 @@ Pipeline: `market_data` (fetch) → `strategy` (decide) → `ctrader_client`
   names. Match the surrounding style.
 - Intentional shortcuts are marked with `ponytail:` comments naming the ceiling.
 - Non-trivial logic ships with a runnable check under `tests/` (no heavy
-  fixtures; deterministic, fast). **Tests stay offline** — never hit the network;
-  the backtest fetches real data only in `main()` (synthetic fallback elsewhere).
+  fixtures; deterministic, fast). **Tests stay offline** — never hit the network.
 - Commit messages explain the *why*; commit/push only the relevant change set.
   Markets are closed on weekends, so live FIX validation needs market hours.

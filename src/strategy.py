@@ -1,16 +1,22 @@
-"""Multi-timeframe RSI strategy (the decision engine described in the README).
+"""Tick-based momentum strategy — FIX-only, no candles, no history.
 
-Mirrors the TradingView "Multi Timeframe RSI" indicator this project grew from:
+Consumes the raw bid/ask tick stream from the cTrader FIX quote session and emits
+BUY / SELL / HOLD, one tick at a time. This is the kind of strategy FIX is built
+for: it reacts to every quote, holds no concept of a "bar", and needs no
+historical data — it warms up from the live stream itself.
 
-    BUY  when RSI(trend timeframe) > midline   AND RSI(entry tf) crosses up   oversold
-    SELL when RSI(trend timeframe) < midline   AND RSI(entry tf) crosses down overbought
+How it works (all per-tick, on the mid-price):
+- a fast and a slow EMA of the mid-price; a crossover is the directional signal,
+- an EMA of the spread used as a microstructure guard — signals are suppressed
+  when the current spread is wide relative to its recent average (you don't want
+  to cross a blown-out spread). A candle/OHLCV strategy can't see this; a tick
+  strategy must.
 
-The higher (trend) timeframe classifies the trend; the entry timeframe spots the
-oversold/overbought turn. RSI uses Wilder's smoothing, matching TradingView's
-``ta.rsi`` so signals line up with the chart in ``docs/``.
+Illustrative, not a production alpha — it shows the FIX tick → decision → execute
+loop, not a tuned edge.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -20,81 +26,53 @@ class Signal(Enum):
     HOLD = "HOLD"
 
 
-def rsi_series(closes: list[float], length: int) -> list[float]:
-    """Wilder's RSI for each close, aligned to ``closes`` (oldest -> newest).
+@dataclass
+class TickMomentumStrategy:
+    fast_period: int = 20  # in ticks, not bars
+    slow_period: int = 100
+    spread_period: int = 50
+    spread_tolerance: float = 1.5  # act only if spread <= tolerance * average spread
 
-    The first ``length`` entries are ``None`` (not enough data to seed the
-    average), matching how ``ta.rsi`` only emits values once warmed up.
-    """
-    if length < 1:
-        raise ValueError("RSI length must be >= 1")
-    if len(closes) <= length:
-        raise ValueError(
-            f"need more than {length} closes to compute RSI, got {len(closes)}"
-        )
+    _fast_ema: float | None = field(default=None, init=False)
+    _slow_ema: float | None = field(default=None, init=False)
+    _spread_ema: float | None = field(default=None, init=False)
+    _ticks: int = field(default=0, init=False)
+    _prev_diff: float | None = field(default=None, init=False)
 
-    gains = 0.0
-    losses = 0.0
-    for index in range(1, length + 1):
-        change = closes[index] - closes[index - 1]
-        gains += max(change, 0.0)
-        losses += max(-change, 0.0)
-    avg_gain = gains / length
-    avg_loss = losses / length
+    def __post_init__(self):
+        if not 0 < self.fast_period < self.slow_period:
+            raise ValueError("require 0 < fast_period < slow_period")
+        self._fast_alpha = 2 / (self.fast_period + 1)
+        self._slow_alpha = 2 / (self.slow_period + 1)
+        self._spread_alpha = 2 / (self.spread_period + 1)
 
-    result: list[float | None] = [None] * length
-    result.append(_rsi_from_averages(avg_gain, avg_loss))
+    def update(self, bid: float, ask: float) -> Signal:
+        """Feed one tick; return the resulting signal (usually HOLD)."""
+        mid = (bid + ask) / 2
+        spread = ask - bid
 
-    for index in range(length + 1, len(closes)):
-        change = closes[index] - closes[index - 1]
-        avg_gain = (avg_gain * (length - 1) + max(change, 0.0)) / length
-        avg_loss = (avg_loss * (length - 1) + max(-change, 0.0)) / length
-        result.append(_rsi_from_averages(avg_gain, avg_loss))
+        if self._fast_ema is None:  # seed on the first tick
+            self._fast_ema = self._slow_ema = mid
+            self._spread_ema = spread
+            self._ticks = 1
+            return Signal.HOLD
 
-    return result
+        self._fast_ema += self._fast_alpha * (mid - self._fast_ema)
+        self._slow_ema += self._slow_alpha * (mid - self._slow_ema)
+        self._spread_ema += self._spread_alpha * (spread - self._spread_ema)
+        self._ticks += 1
 
+        diff = self._fast_ema - self._slow_ema  # fast above slow -> positive
+        previous = self._prev_diff
+        self._prev_diff = diff
 
-def _rsi_from_averages(avg_gain: float, avg_loss: float) -> float:
-    if avg_loss == 0.0:
-        return 100.0
-    relative_strength = avg_gain / avg_loss
-    return 100.0 - (100.0 / (1.0 + relative_strength))
+        if self._ticks < self.slow_period or previous is None:
+            return Signal.HOLD  # still warming up
+        crossed_up = previous <= 0 < diff
+        crossed_down = previous >= 0 > diff
+        if not (crossed_up or crossed_down):
+            return Signal.HOLD  # no zero-crossing on this tick
+        if spread > self.spread_tolerance * self._spread_ema:
+            return Signal.HOLD  # book too wide to act on
 
-
-@dataclass(frozen=True)
-class MultiTimeframeRsiStrategy:
-    rsi_length: int = 21
-    oversold: float = 40.0
-    midline: float = 50.0
-    overbought: float = 60.0
-
-    def decide(
-        self, entry_closes: list[float], trend_closes: list[float]
-    ) -> Signal:
-        """Return BUY / SELL / HOLD from entry- and trend-timeframe closes.
-
-        ``entry_closes``  -- closes on the fast entry timeframe (e.g. 5m).
-        ``trend_closes``  -- closes on the higher trend timeframe (e.g. 240m).
-        Both oldest -> newest.
-        """
-        entry_rsi = rsi_series(entry_closes, self.rsi_length)
-        trend_rsi = rsi_series(trend_closes, self.rsi_length)[-1]
-
-        previous, current = entry_rsi[-2], entry_rsi[-1]
-        if previous is None:
-            raise ValueError("need at least one more entry close for a crossover")
-
-        return self.signal_from_rsi(trend_rsi, previous, current)
-
-    def signal_from_rsi(
-        self, trend_rsi: float, previous_entry_rsi: float, current_entry_rsi: float
-    ) -> Signal:
-        """The core rule, on already-computed RSI values (reused by the backtest)."""
-        crossed_up = previous_entry_rsi <= self.oversold < current_entry_rsi
-        crossed_down = previous_entry_rsi >= self.overbought > current_entry_rsi
-
-        if trend_rsi > self.midline and crossed_up:
-            return Signal.BUY
-        if trend_rsi < self.midline and crossed_down:
-            return Signal.SELL
-        return Signal.HOLD
+        return Signal.BUY if crossed_up else Signal.SELL
