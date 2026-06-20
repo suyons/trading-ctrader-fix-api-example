@@ -1,7 +1,28 @@
-# trading-ctrader-fix-api-example
+# Algo Trading — cTrader FIX API Example
+
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Packaging](https://img.shields.io/badge/packaging-uv-purple)
+![Protocol](https://img.shields.io/badge/protocol-FIX%204.4-green)
+![Transport](https://img.shields.io/badge/transport-TLS-success)
 
 A small, self-contained example of trading on **cTrader over the FIX 4.4 API**,
-driven by a **multi-timeframe RSI** strategy for an example.
+driven by a **multi-timeframe RSI** strategy. It connects directly to a broker's
+cTrader FIX endpoints — no TradingView webhook, no web server, no third-party
+relay — evaluates a signal, and (optionally) places the order itself.
+
+> **Heads up — this is an educational example.** It defaults to a *demo* account
+> and to *not* placing live orders. Read the [disclaimer](#disclaimer) before
+> pointing it at real money.
+
+## Features
+
+- 🔌 **Pure-stdlib FIX 4.4 client** for cTrader (QUOTE + TRADE sessions).
+- 🔒 **TLS by default** (ports 5211/5212), with a one-line fallback to plain text.
+- 📈 **Multi-timeframe RSI strategy** as a small, pure, unit-tested function.
+- 🧩 **Decoupled design** — the decision engine takes price data and returns
+  `BUY` / `SELL` / `HOLD`; bring your own candle feed.
+- 🔑 **`.env`-based credentials** laid out to mirror the cTrader FIX API panel.
+- 🛟 **Safety switch** so the example can't fire real orders by accident.
 
 ## The example strategy
 
@@ -23,9 +44,6 @@ limit order plotted on `OANDA:EURUSD`:
 
 ![EURUSD image](docs/EURUSD_2024-05-22_12-58-35.png)
 
-See [`src/ctrader_fix/strategy.py`](src/ctrader_fix/strategy.py) for the
-implementation.
-
 ## Project layout
 
 ```
@@ -42,9 +60,14 @@ tests/
   test_strategy.py   Behaviour checks for the decision engine
 ```
 
-## Setup
+## Prerequisites
 
-This project uses [uv](https://docs.astral.sh/uv/) and `pyproject.toml`.
+- **Python 3.10+** and [uv](https://docs.astral.sh/uv/).
+- A **cTrader account** (start with a demo) at a broker that offers the FIX API.
+- **FIX API enabled** for that account — in cTrader: *Settings → FIX API*. That
+  page shows the Host, Password and SenderCompID you'll paste into `.env`.
+
+## Setup
 
 ```bash
 uv sync                       # create the venv and install dependencies
@@ -52,6 +75,29 @@ cp .env.example .env          # then fill in your cTrader FIX credentials
 ```
 
 `.env` holds your credentials and is git-ignored — never commit it.
+
+## Configuration
+
+All configuration lives in `.env`. The template (`.env.example`) is laid out to
+match the two connection blocks shown in cTrader's *Settings → FIX API* panel —
+both blocks share the same Host, Password and SenderCompID, so you copy those
+three values across.
+
+| Variable                 | Required | Default | Description                                                        |
+| ------------------------ | :------: | :-----: | ------------------------------------------------------------------ |
+| `CTRADER_HOST`           |    ✅    |    —    | FIX host name, e.g. `demo-xx.p.c-trader.com`                |
+| `CTRADER_SENDER_COMP_ID` |    ✅    |    —    | Account / SenderCompID, e.g. `demo.broker.1234567`              |
+| `CTRADER_PASSWORD`       |    ✅    |    —    | Your FIX API / account password                                    |
+| `CTRADER_USE_SSL`        |    —     | `true`  | `true` → TLS ports 5211/5212, `false` → plain text 5201/5202       |
+| `CTRADER_CURRENCY`       |    —     | `USD`   | Account deposit currency                                           |
+| `CTRADER_LIVE_TRADING`   |    —     | `false` | Safety switch — only `true` lets the example place real orders     |
+
+FIX ports, selected automatically from `CTRADER_USE_SSL`:
+
+| Session         | TLS (default) | Plain text |
+| --------------- | :-----------: | :--------: |
+| QUOTE (prices)  |     5211      |    5201    |
+| TRADE (orders)  |     5212      |    5202    |
 
 ## Usage
 
@@ -61,7 +107,7 @@ uv run python src/example_trade.py   # evaluate the strategy and print the signa
 
 By default it only prints the decision. To actually place orders, set
 `CTRADER_LIVE_TRADING=true` in `.env` (and supply a real OHLC feed — see the note
-in `example_trade.py`).
+in `src/example_trade.py`).
 
 Using the pieces directly:
 
@@ -75,17 +121,30 @@ signal = strategy.decide(entry_closes, trend_closes)   # closes oldest -> newest
 
 if signal is not Signal.HOLD:
     config = load_config()
-    client = Ctrader(config.host, config.sender_comp_id, config.password)
+    client = Ctrader(
+        config.host, config.sender_comp_id, config.password, use_ssl=config.use_ssl
+    )
     (client.buy if signal is Signal.BUY else client.sell)("EURUSD", 0.01, 0, 0)
 ```
 
 ## Tests
 
 ```bash
-uv run pytest                 # or: python tests/test_strategy.py
+uv run pytest                                    # full suite
+PYTHONPATH=src uv run python tests/test_strategy.py   # zero-dependency self-check
 ```
+
+## Disclaimer
+
+This project is provided **for educational purposes only** and comes with **no
+warranty**. Automated trading carries substantial risk of loss; you are solely
+responsible for any orders it sends. Always test against a **demo account**
+first, and never trade money you can't afford to lose. Nothing here is financial
+advice.
 
 ## Credits
 
-Forked from [ejtraderLabs/ejtraderCT](https://github.com/ejtraderLabs/ejtraderCT).
-The FIX protocol layer is derived from that project.
+Forked from [ejtraderLabs/ejtraderCT](https://github.com/ejtraderLabs/ejtraderCT);
+the FIX protocol layer is derived from that project. See the
+[cTrader FIX API documentation](https://help.ctrader.com/fix/) for protocol
+details.
