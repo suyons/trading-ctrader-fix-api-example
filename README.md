@@ -88,8 +88,8 @@ three values across.
 
 | Variable                 | Required | Default | Description                                                        |
 | ------------------------ | :------: | :-----: | ------------------------------------------------------------------ |
-| `CTRADER_HOST`           |    ✅    |    —    | FIX host name, e.g. `demo-xx.p.c-trader.com`                |
-| `CTRADER_SENDER_COMP_ID` |    ✅    |    —    | Account / SenderCompID, e.g. `demo.broker.1234567`              |
+| `CTRADER_HOST`           |    ✅    |    —    | FIX host name, e.g. `demo-xx.p.c-trader.com`                       |
+| `CTRADER_SENDER_COMP_ID` |    ✅    |    —    | Account / SenderCompID, e.g. `demo.broker.1234567`                 |
 | `CTRADER_PASSWORD`       |    ✅    |    —    | Your FIX API / account password                                    |
 | `CTRADER_USE_SSL`        |    —     | `true`  | `true` → TLS ports 5211/5212, `false` → plain text 5201/5202       |
 | `CTRADER_CURRENCY`       |    —     | `USD`   | Account deposit currency                                           |
