@@ -18,8 +18,8 @@ relay — evaluates a signal, and (optionally) places the order itself.
 - 🔌 **Pure-stdlib FIX 4.4 client** for cTrader (QUOTE + TRADE sessions).
 - 🔒 **TLS by default** (ports 5211/5212), with a one-line fallback to plain text.
 - 📈 **Multi-timeframe RSI strategy** as a small, pure, unit-tested function.
-- 🧩 **Decoupled design** — the decision engine takes price data and returns
-  `BUY` / `SELL` / `HOLD`; bring your own candle feed.
+- 🧩 **Decoupled pipeline** — `main.py` orchestrates *fetch → decide → execute*,
+  one module per responsibility; bring your own candle feed.
 - 🔑 **`.env`-based credentials** laid out to mirror the cTrader FIX API panel.
 
 ## The example strategy
@@ -46,9 +46,10 @@ limit order plotted on `OANDA:EURUSD`:
 
 ```
 src/
+  main.py            Orchestrator: fetch OHLCV -> decide -> execute
   config.py          Load FIX credentials from .env (fails fast if missing)
+  market_data.py     Fetch OHLCV closes per symbol/timeframe (the data seam)
   strategy.py        Multi-timeframe RSI decision engine (BUY / SELL / HOLD)
-  example_trade.py   Runnable example: evaluate the strategy, optionally trade
   ctrader_client.py  High-level client: buy/sell/limit/positions/orders
   fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
   stream_buffer.py   Byte buffer that reassembles FIX messages off the socket
@@ -56,6 +57,7 @@ src/
   calculations.py    Spread, pip value and commission helpers
 tests/
   test_strategy.py   Behaviour checks for the decision engine
+  test_pipeline.py   Wiring check: sample data -> strategy -> signal
 ```
 
 ## Prerequisites
@@ -99,13 +101,14 @@ FIX ports, selected automatically from `CTRADER_USE_SSL`:
 ## Usage
 
 ```bash
-uv run python src/example_trade.py   # evaluate the strategy and act on the signal
+uv run python src/main.py   # fetch data, evaluate the strategy, act on the signal
 ```
 
-It evaluates the strategy and prints the signal; when the signal is `BUY` or
-`SELL` it connects over FIX and places the order — so point it at a **demo**
-account, and swap the placeholder closes for a real OHLC feed (see the note in
-`src/example_trade.py`).
+`main.py` runs the full pipeline — **fetch** OHLCV closes (`market_data.py`),
+**decide** with the multi-timeframe RSI strategy (`strategy.py`), and on a `BUY`
+or `SELL` signal **execute** the order over FIX (`ctrader_client.py`). Out of the
+box it uses `SampleMarketData` (synthetic closes) so it runs offline; swap in a
+real provider in `src/market_data.py` and point it at a **demo** account.
 
 Using the pieces directly:
 
