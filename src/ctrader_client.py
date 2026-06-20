@@ -5,13 +5,12 @@ Wraps the raw FIX 4.4 session (:mod:`fix_protocol`) with convenient
 live quote subscriptions. This is the object an application interacts with.
 """
 
+import copy
 import logging
-import json
 import time
 import random
 from operator import itemgetter
 from fix_protocol import FIX, Side, OrderType
-from symbols import SYMBOLSLIST
 
 
 class Ctrader:
@@ -27,16 +26,15 @@ class Ctrader:
         use_ssl=True,
         login_timeout=15,
     ):
-        """AI is creating summary for __init__
+        """Connect and log in to the cTrader FIX session.
 
         Args:
-            server ([str]): [example h8.p.c-trader.cn]
-            account ([str]): [live.icmarkets.1104926 or demo.icmarkets.1104926]
-            client_id ([str]):[example 1 or trader-1 its comment on position label]
-            spread ([int]): [example 0.00010 default 0.00005]
-            password ([str]): [example 12345678 need to setup when you create api on ctrader platform]
-            use_ssl ([bool]): [True -> TLS ports 5211/5212, False -> plain 5201/5202]
-            login_timeout ([float]): [seconds to wait for connect + login before raising]
+            server: FIX host, e.g. ``h8.p.c-trader.cn``.
+            account: full account string, e.g. ``demo.icmarkets.1104926``.
+            client_id: position-label comment, e.g. ``1`` or ``trader-1``.
+            password: the API password set on the cTrader platform.
+            use_ssl: True -> TLS ports 5211/5212, False -> plain 5201/5202.
+            login_timeout: seconds to wait for connect + login before raising.
 
         Raises:
             TimeoutError: if connecting or logging in exceeds ``login_timeout``.
@@ -71,7 +69,6 @@ class Ctrader:
             login_timeout=login_timeout,
         )
         self.market_data_list = {}
-        self.symbol_table = SYMBOLSLIST["default"]
 
     def trade(
         self,
@@ -115,7 +112,6 @@ class Ctrader:
         otype = actionType
         symbol = v_symbol[:6]
         size = int(float(v_lots) * 100000)
-        global ticket
         ticket = None
         client_id = str(self.client["_id"])
         command = ""
@@ -180,17 +176,7 @@ class Ctrader:
         return v_ticket
 
     def buy(self, symbol, volume, stoploss, takeprofit, price=0):
-        """summary for buy
-
-        Args:
-            symbol ([str]): ["EURUSD"]
-            volume ([float]): [0.01]
-            stoploss ([float]): [1.18]
-            takeprofit ([float]): [1.19]
-            price (int, optional): [on the price]. Defaults to 0.
-        Returns:
-            [int]: [order ID]
-        """
+        """Open a market buy, e.g. buy("EURUSD", 0.01, 0, 0). Returns the order ID."""
         return self.trade(
             symbol,
             "OPEN",
@@ -205,17 +191,7 @@ class Ctrader:
         )
 
     def sell(self, symbol, volume, stoploss=0, takeprofit=9, price=0):
-        """summary for sell
-
-        Args:
-            symbol ([str]): ["EURUSD"]
-            volume ([float]): [0.01]
-            stoploss ([float]): [1.19]
-            takeprofit ([float]): [1.18]
-            price (int, optional): [on the price]. Defaults to 0.
-        Returns:
-            [int]: [Order ID]
-        """
+        """Open a market sell, e.g. sell("EURUSD", 0.01). Returns the order ID."""
         return self.trade(
             symbol,
             "OPEN",
@@ -230,15 +206,7 @@ class Ctrader:
         )
 
     def buyLimit(self, symbol, volume, price=0):
-        """summary for buy Limit
-
-        Args:
-            symbol ([str]): ["EURUSD"]
-            volume ([float]): [0.01]
-            price ([float]): [1.8]. Defaults to 0.
-        Returns:
-            [int]: [order ID]
-        """
+        """Place a buy limit order. Returns the order ID."""
         return self.trade(
             symbol,
             "OPEN",
@@ -253,15 +221,7 @@ class Ctrader:
         )
 
     def sellLimit(self, symbol, volume, price=0):
-        """summary for sellLimit
-
-        Args:
-            symbol ([str]): ["EURUSD"]
-            volume ([float]): [0.01]
-            price (int, optional): [1.22]. Defaults to 0.
-        Returns:
-            [type]: [description]
-        """
+        """Place a sell limit order. Returns the order ID."""
         return self.trade(
             symbol,
             "OPEN",
@@ -276,15 +236,7 @@ class Ctrader:
         )
 
     def buyStop(self, symbol, volume, price=0):
-        """summary for buyStop
-
-        Args:
-            symbol ([str]): ["EURUSD"]
-            volume ([float]): [0.01]
-            price (int, optional): [1.22]. Defaults to 0.
-        Returns:
-            [type]: [description]
-        """
+        """Place a buy stop order. Returns the order ID."""
         return self.trade(
             symbol,
             "OPEN",
@@ -299,15 +251,7 @@ class Ctrader:
         )
 
     def sellStop(self, symbol, volume, price=0):
-        """summary for sellStop
-
-        Args:
-            symbol ([str]): ["EURUSD"]
-            volume ([float]): [0.01]
-            price (int, optional): [1.22]. Defaults to 0.
-        Returns:
-            [type]: [description]
-        """
+        """Place a sell stop order. Returns the order ID."""
         return self.trade(
             symbol,
             "OPEN",
@@ -330,7 +274,6 @@ class Ctrader:
         except Exception as e:
             logging.info(e)
             action = None
-            pass
         return action
 
     def orderCancelById(self, id):
@@ -339,14 +282,13 @@ class Ctrader:
         except Exception as e:
             logging.info(e)
             action = None
-            pass
         return action
 
     def positions(self):
-        return json.loads(json.dumps(self.client["positions"]))
+        return copy.deepcopy(self.client["positions"])
 
     def orders(self):
-        return json.loads(json.dumps(self.client["orders"]))
+        return copy.deepcopy(self.client["orders"])
 
     def parse_command(self, command: str, client_id: str):
         parts = command.split(" ")

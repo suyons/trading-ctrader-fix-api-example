@@ -45,8 +45,6 @@ src/
   ctrader_client.py  High-level client: buy/sell/limit/positions/orders
   fix_protocol.py    Raw FIX 4.4 session (logon, market data, order entry)
   stream_buffer.py   Byte buffer reassembling FIX messages off the socket
-  symbols.py         Default symbol id / pip-position reference table
-  calculations.py    Spread, pip value, commission helpers
 tests/               test_strategy / test_tick_stream / test_login_timeout
 ```
 
